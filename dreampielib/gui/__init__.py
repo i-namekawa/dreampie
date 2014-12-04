@@ -667,6 +667,15 @@ class DreamPie(SimpleGladeApp):
             sb.select_range(sb.get_iter_at_offset(start_offset), end)
         return True
 
+    @sourceview_keyhandler('Escape', 0)
+    def on_sourceview_escape(self):
+        timeout_add(500, self.clear_sb)
+    
+    def clear_sb(self):
+        sb = self.sourcebuffer
+        sb.set_text('')
+        return False
+
     @sourceview_keyhandler('Home', 0)
     def on_sourceview_home(self):
         # If the cursor is already at the beginning of the line, move to the
