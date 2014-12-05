@@ -80,10 +80,10 @@ from . import gtkexcepthook
 gtkexcepthook.install(gladefile)
 
 try:
-    from glib import timeout_add, idle_add
+    from glib import timeout_add, idle_add, source_remove
 except ImportError:
     # In PyGObject 2.14, it's in gobject.
-    from gobject import timeout_add, idle_add
+    from gobject import timeout_add, idle_add, source_remove
 
 from .. import __version__
 
@@ -235,6 +235,11 @@ class DreamPie(SimpleGladeApp):
         # priority than the key-press event of autocomplete, when active.
         self.sourceview_keypress_handler = self.sourceview.connect(
             'key-press-event', self.on_sourceview_keypress)
+        
+        self._long_press_srcid = None
+        self.sourceview.connect(
+            'key-release-event', self.on_sourceview_escapeUP)
+        
         self.sv_changed.append(self.on_sv_changed)
         
         self.sourceview.drag_dest_set(0, [], 0)
@@ -296,7 +301,10 @@ class DreamPie(SimpleGladeApp):
         self.sourcebuffer = new_sv.get_buffer()
         self.sourceview_keypress_handler = self.sourceview.connect(
             'key-press-event', self.on_sourceview_keypress)
-    
+        self._long_press_srcid = None
+        self.sourceview.connect(
+            'key-release-event', self.on_sourceview_escapeUP)    
+        
     def load_popup_menus(self):
         # Load popup menus from the glade file. Would not have been needed if
         # popup menus could be children of windows.
@@ -493,6 +501,15 @@ class DreamPie(SimpleGladeApp):
         sb = self.sourcebuffer
         source = get_text(sb, sb.get_start_iter(), sb.get_end_iter())
         source = source.rstrip()
+        
+        # //removing unnecesary indent
+        count=[]
+        for s in source.splitlines():
+            count.append(min([n for n,ss in enumerate(s.split(' ')) if ss != '']))
+        n_space2remove = min(count)
+        source = '\n'.join([s[n_space2remove:] for s in source.splitlines()])
+        # removing unnecesary indent//
+        
         source = self.replace_gtk_quotes(source)
         try:
             # There's a chance that the subprocess won't reply, because it's
@@ -667,9 +684,20 @@ class DreamPie(SimpleGladeApp):
             sb.select_range(sb.get_iter_at_offset(start_offset), end)
         return True
 
+    def on_sourceview_escapeUP(self, _widget, event):
+        keyval_name, state = parse_keypress_event(event)
+        if (keyval_name, state) == ('Escape', 0):
+            if self._long_press_srcid:
+                source_remove(self._long_press_srcid)
+                self._long_press_srcid = None
+    
     @sourceview_keyhandler('Escape', 0)
     def on_sourceview_escape(self):
-        timeout_add(500, self.clear_sb)
+        'http://www.gtkforums.com/viewtopic.php?f=3&t=178522'
+        if self._long_press_srcid:
+            return
+        srcid = timeout_add(AUTOCOMPLETE_WAIT, self.clear_sb)
+        self._long_press_srcid = srcid        
     
     def clear_sb(self):
         sb = self.sourcebuffer
