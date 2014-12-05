@@ -505,7 +505,11 @@ class DreamPie(SimpleGladeApp):
         # //removing unnecesary indent
         count=[]
         for s in source.splitlines():
-            count.append(min([n for n,ss in enumerate(s.split(' ')) if ss != '']))
+            appearance = [n for n,ss in enumerate(s.split(' ')) if ss != '']
+            if appearance:
+                count.append(min(appearance))
+            else:
+                count.append(0)
         n_space2remove = min(count)
         source = '\n'.join([s[n_space2remove:] for s in source.splitlines()])
         # removing unnecesary indent//
