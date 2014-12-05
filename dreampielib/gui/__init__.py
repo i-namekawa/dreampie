@@ -114,6 +114,14 @@ from . import tags
 from .update_check import update_check
 from . import bug_report
 
+if sys.platform == 'win32':
+    
+    try:
+        import pyHook # To watch for F9 global keybind
+        from SendKeys import SendKeys # To send Ctrl+C to other apps
+    except ImportError:
+        print 'required modules either SendKeys and pyHook not found'
+
 INDENT_WIDTH = 4
 
 # Default line length, by which we set the default window size
@@ -161,6 +169,10 @@ class DreamPie(SimpleGladeApp):
         self.set_mac_accelerators()
         
         self.config = Config()
+        
+        hm = pyHook.HookManager()
+        hm.KeyDown = self.OnGlobalKeyboardEvent
+        hm.HookKeyboard()
         
         if self.config.get_bool('start-rpdb2-embedded'):
             print 'Starting rpdb2 embedded debugger...',
@@ -295,6 +307,31 @@ class DreamPie(SimpleGladeApp):
         
         update_check(self.on_update_available)
         
+
+    # signal handler called when the clipboard returns text data
+    def clipboard_text_received(self, clipboard, text, data):
+        if not text or text == '':
+            return
+        # execute only after receiving buffer
+        sb = self.sourcebuffer
+        sb.insert_at_cursor(text)
+        self.execute_source()
+        self.set_is_executing(True)
+        
+        return
+
+
+    def OnGlobalKeyboardEvent(self, event): # event is from pyhook not gtk
+        if event.Key == 'F9' and event.WindowName != 'DreamPie':
+            SendKeys('^c') # sending Ctrl+C to the other app in focus
+            self.clear_sb() # clearing multiline editor
+            #self.selection.paste() # this will paste the text buffer but not needed after all.
+            
+            #http://python.developpez.com/cours/pygtktutorial/php/pygtken/examples/clipboard.py
+            self.selection.clipboard.request_text(self.clipboard_text_received)
+            
+        return True
+
     def on_sv_changed(self, new_sv):
         self.sourceview.disconnect(self.sourceview_keypress_handler)
         self.sourceview = new_sv
@@ -510,8 +547,9 @@ class DreamPie(SimpleGladeApp):
                 count.append(min(appearance))
             else:
                 count.append(0)
-        n_space2remove = min(count)
-        source = '\n'.join([s[n_space2remove:] for s in source.splitlines()])
+        if count:
+            n_space2remove = min(count)
+            source = '\n'.join([s[n_space2remove:] for s in source.splitlines()])
         # removing unnecesary indent//
         
         source = self.replace_gtk_quotes(source)
@@ -690,11 +728,13 @@ class DreamPie(SimpleGladeApp):
 
     def on_sourceview_escapeUP(self, _widget, event):
         keyval_name, state = parse_keypress_event(event)
+        #print 'release event: ', keyval_name, state
         if (keyval_name, state) == ('Escape', 0):
             if self._long_press_srcid:
                 source_remove(self._long_press_srcid)
                 self._long_press_srcid = None
-    
+
+        
     @sourceview_keyhandler('Escape', 0)
     def on_sourceview_escape(self):
         'http://www.gtkforums.com/viewtopic.php?f=3&t=178522'
@@ -705,7 +745,7 @@ class DreamPie(SimpleGladeApp):
     
     def clear_sb(self):
         sb = self.sourcebuffer
-        sb.set_text('')
+        sb.set_text('', 0)
         return False
 
     @sourceview_keyhandler('Home', 0)
