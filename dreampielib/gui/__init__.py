@@ -26,6 +26,8 @@ import webbrowser
 import re
 from keyword import iskeyword
 
+from urllib import unquote
+
 import logging
 from logging import debug
 #logging.basicConfig(format="dreampie: %(message)s", level=logging.DEBUG)
@@ -144,7 +146,9 @@ sourceview_keyhandler = make_keyhandler_decorator(sourceview_keyhandlers)
 
 def got_data_cb(wid, context, x, y, data, info, time, sv):
     buf = data.get_uris()[0]
-    sv.set_text("r'"+buf+"'",0)
+    if buf.find('file:///') == 0:
+        buf = unquote(buf.split('file:///')[1])
+        sv.set_text("r'"+buf+"'",0)
     context.finish(True, False, time)
 
 def drop_cb(wid, context, x, y, time):
