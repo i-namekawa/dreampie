@@ -32,6 +32,9 @@ import logging
 from logging import debug
 #logging.basicConfig(format="dreampie: %(message)s", level=logging.DEBUG)
 
+#import threading
+#lock = threading.Lock()
+
 def find_data_dir():
     """
     Find the data directory in which to find files.
@@ -174,9 +177,8 @@ class DreamPie(SimpleGladeApp):
         
         self.config = Config()
         
-        hm = pyHook.HookManager()
-        hm.KeyDown = self.OnGlobalKeyboardEvent
-        hm.HookKeyboard()
+        if sys.platform == 'win32':
+            self.setupGlobalHook()
         
         if self.config.get_bool('start-rpdb2-embedded'):
             print 'Starting rpdb2 embedded debugger...',
@@ -310,31 +312,67 @@ class DreamPie(SimpleGladeApp):
             self.config.save()
         
         update_check(self.on_update_available)
-        
+
+
+    def setupGlobalHook(self):
+        hm = pyHook.HookManager()
+        hm.KeyDown = self.OnGlobalKeyboardEvent
+        hm.HookKeyboard()
+        self.hm = hm
 
     # signal handler called when the clipboard returns text data
     def clipboard_text_received(self, clipboard, text, data):
         if not text or text == '':
             return
         # execute only after receiving buffer
+        
         sb = self.sourcebuffer
         sb.insert_at_cursor(text)
-        self.execute_source()
-        self.set_is_executing(True)
         
-        return
+        #self.execute_source()  # this is a primitive way
+        #self.set_is_executing(True) # instead
+        #self.on_sourceview_return()  # emulate Enter event to execute
+        
+        # ok. on_sourceview_return did not work.
+        # steal a part of code from on_sourceview_return
+        if not self.is_executing:
+            source = get_text(sb, sb.get_start_iter(), sb.get_end_iter())
+            source = source.rstrip()
+            source = self.replace_gtk_quotes(source)
+            try:
+                is_incomplete = self.call_subp_noblock(u'is_incomplete', source)
+            except TimeoutError:
+                is_incomplete = True
+            if not is_incomplete:
+                self.execute_source()
+                return True
+        else:
+            # is_executing
+            self.send_stdin()
+            return True
+        
+        r = newline_and_indent(self.sourceview, INDENT_WIDTH)
+        return r
 
 
     def OnGlobalKeyboardEvent(self, event): # event is from pyhook not gtk
-        if event.Key == 'F9' and event.WindowName != 'DreamPie':
-            SendKeys('^c') # sending Ctrl+C to the other app in focus
-            self.clear_sb() # clearing multiline editor
-            #self.selection.paste() # this will paste the text buffer but not needed after all.
-            
-            #http://python.developpez.com/cours/pygtktutorial/php/pygtken/examples/clipboard.py
-            self.selection.clipboard.request_text(self.clipboard_text_received)
-            
+        print event.Key, event.WindowName[:30]
+        if event.Key == 'F9' and event.WindowName not in ('DreamPie', 'C:\\Windows\\system32\\cmd.exe'):
+            #t = threading.Thread(target=self.sendkeys) #added to queue
+            #t.start()
+            self.sendkeys()
         return True
+    
+    def sendkeys(self):
+        #lock.acquire() # http://stackoverflow.com/questions/3673769/pyhook-pythoncom-stop-working-after-too-much-keys-pressed-python
+        SendKeys('^c') # sending Ctrl+C to the other app in focus
+        self.clear_sb() # clearing multiline editor
+        #self.selection.paste() # this will paste the text buffer but not needed after all.
+        
+        #http://python.developpez.com/cours/pygtktutorial/php/pygtken/examples/clipboard.py
+        self.selection.clipboard.request_text(self.clipboard_text_received)
+        #lock.release()
+        
 
     def on_sv_changed(self, new_sv):
         self.sourceview.disconnect(self.sourceview_keypress_handler)
@@ -360,7 +398,7 @@ class DreamPie(SimpleGladeApp):
         self.copy_section_menu = xml.get_widget('copy_section_menu')
         self.view_section_menu = xml.get_widget('view_section_menu')
         self.save_section_menu = xml.get_widget('save_section_menu')
-    
+        
     def set_mac_accelerators(self):
         # Set up accelerators suitable for the Mac.
         # Ctrl-Up and Ctrl-Down are taken by the window manager, so we use
@@ -739,6 +777,13 @@ class DreamPie(SimpleGladeApp):
                 self._long_press_srcid = None
 
         
+    @sourceview_keyhandler('F12', 0)
+    def on_sourceview_f12(self):
+        if sys.platform == 'win32':
+            print 'F12 pressed: repairing pyHook'
+            self.setupGlobalHook()
+        return False
+        
     @sourceview_keyhandler('Escape', 0)
     def on_sourceview_escape(self):
         'http://www.gtkforums.com/viewtopic.php?f=3&t=178522'
@@ -746,7 +791,7 @@ class DreamPie(SimpleGladeApp):
             return
         srcid = timeout_add(AUTOCOMPLETE_WAIT, self.clear_sb)
         self._long_press_srcid = srcid        
-    
+        
     def clear_sb(self):
         sb = self.sourcebuffer
         sb.set_text('', 0)
@@ -821,6 +866,9 @@ class DreamPie(SimpleGladeApp):
         idle_add(self.call_tips.show, True)
 
     def on_sourceview_keypress(self, _widget, event):
+        #keyname = gtk.gdk.keyval_name(event.keyval) 
+        # http://faq.pygtk.org/index.py?req=show&file=faq05.005.htp
+        #print "Key %s (%d) was pressed" % (keyname, event.keyval)        
         return handle_keypress(self, event, sourceview_keyhandlers)
 
 
