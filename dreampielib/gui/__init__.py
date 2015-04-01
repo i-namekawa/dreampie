@@ -147,6 +147,7 @@ sourceview_keyhandlers = {}
 sourceview_keyhandler = make_keyhandler_decorator(sourceview_keyhandlers)
 
 
+
 def got_data_cb(wid, context, x, y, data, info, time, sv):
     buf = data.get_uris()[0]
     if buf.find('file:///') == 0:
@@ -166,6 +167,7 @@ def get_widget(name):
     return xml.get_widget(name)
 
 class DreamPie(SimpleGladeApp):
+      
     def __init__(self, pyexec, runfile):
         """
         pyexec - the Python interpreter executable
@@ -257,6 +259,13 @@ class DreamPie(SimpleGladeApp):
         self._long_press_srcid = None
         self.sourceview.connect(
             'key-release-event', self.on_sourceview_escapeUP)
+        
+        #self.sourceview.connect("destroy", self.on_sourceview_Q)
+        #self.window_main.__gsignals__ = {
+        #"destroy" : "override"
+        #}
+        #~ self.window_main.connect("destroy", self.on_sourceview_Q)
+        
         
         self.sv_changed.append(self.on_sv_changed)
         
@@ -356,7 +365,7 @@ class DreamPie(SimpleGladeApp):
 
 
     def OnGlobalKeyboardEvent(self, event): # event is from pyhook not gtk
-        print event.Key, event.WindowName[:30]
+        print "pyhook:", event.Key, event.WindowName[:30]
         if event.Key == 'F9' and event.WindowName not in ('DreamPie', 'C:\\Windows\\system32\\cmd.exe'):
             #t = threading.Thread(target=self.sendkeys) #added to queue
             #t.start()
@@ -652,7 +661,8 @@ class DreamPie(SimpleGladeApp):
             sb.delete(sb.get_start_iter(), sb.get_end_iter())
 
         self.subp.write(s)
-
+    
+    
     @sourceview_keyhandler('Return', 0)
     def on_sourceview_return(self):
         sb = self.sourcebuffer
@@ -777,13 +787,19 @@ class DreamPie(SimpleGladeApp):
                 self._long_press_srcid = None
 
         
-    @sourceview_keyhandler('F12', 0)
+    @sourceview_keyhandler('F12', 4)
     def on_sourceview_f12(self):
         if sys.platform == 'win32':
             print 'F12 pressed: repairing pyHook'
             self.setupGlobalHook()
         return False
-        
+    
+    #@sourceview_keyhandler('Control_L', 4)
+    #@sourceview_keyhandler('q', 4) # Ctrl+q should be like this
+    #def on_sourceview_Q(self, event):
+        #print 'on_sourceview_Q: wa'
+        #return True
+    
     @sourceview_keyhandler('Escape', 0)
     def on_sourceview_escape(self):
         'http://www.gtkforums.com/viewtopic.php?f=3&t=178522'
@@ -867,8 +883,16 @@ class DreamPie(SimpleGladeApp):
 
     def on_sourceview_keypress(self, _widget, event):
         #keyname = gtk.gdk.keyval_name(event.keyval) 
-        # http://faq.pygtk.org/index.py?req=show&file=faq05.005.htp
-        #print "Key %s (%d) was pressed" % (keyname, event.keyval)        
+        ## http://faq.pygtk.org/index.py?req=show&file=faq05.005.htp
+        #print "Key %s (%d) was pressed" % (keyname, event.keyval)
+        
+        #if event.state == gdk.CONTROL_MASK and event.keyval == ord('q'):
+            #print 'wawawa'
+            #event = None
+            #return None
+        #else:
+        
+        
         return handle_keypress(self, event, sourceview_keyhandlers)
 
 
@@ -900,6 +924,7 @@ class DreamPie(SimpleGladeApp):
 
     def on_textview_keypress(self, _widget, event):
         keyval_name, state = parse_keypress_event(event)
+        print 'on_textview_keypress', keyval_name, state
         if (keyval_name, state) in (('Return', 0), ('KP_Enter', 0)):
             return self.history.copy_to_sourceview()
 
