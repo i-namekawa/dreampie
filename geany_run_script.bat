@@ -1,4 +1,4 @@
-"C:\Python27\python.exe" "dreampie.py"
+python.exe "dreampie.py"
 
 pause
 del "%0"
