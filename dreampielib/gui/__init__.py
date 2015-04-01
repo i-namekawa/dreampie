@@ -119,13 +119,6 @@ from . import tags
 from .update_check import update_check
 from . import bug_report
 
-if sys.platform == 'win32':
-    
-    try:
-        import pyHook # To watch for F9 global keybind
-        from SendKeys import SendKeys # To send Ctrl+C to other apps
-    except ImportError:
-        print 'required modules either SendKeys and pyHook not found'
 
 INDENT_WIDTH = 4
 
@@ -178,9 +171,6 @@ class DreamPie(SimpleGladeApp):
         self.set_mac_accelerators()
         
         self.config = Config()
-        
-        if sys.platform == 'win32':
-            self.setupGlobalHook()
         
         if self.config.get_bool('start-rpdb2-embedded'):
             print 'Starting rpdb2 embedded debugger...',
@@ -260,13 +250,6 @@ class DreamPie(SimpleGladeApp):
         self.sourceview.connect(
             'key-release-event', self.on_sourceview_escapeUP)
         
-        #self.sourceview.connect("destroy", self.on_sourceview_Q)
-        #self.window_main.__gsignals__ = {
-        #"destroy" : "override"
-        #}
-        #~ self.window_main.connect("destroy", self.on_sourceview_Q)
-        
-        
         self.sv_changed.append(self.on_sv_changed)
         
         self.sourceview.drag_dest_set(0, [], 0)
@@ -322,66 +305,6 @@ class DreamPie(SimpleGladeApp):
         
         update_check(self.on_update_available)
 
-
-    def setupGlobalHook(self):
-        hm = pyHook.HookManager()
-        hm.KeyDown = self.OnGlobalKeyboardEvent
-        hm.HookKeyboard()
-        self.hm = hm
-
-    # signal handler called when the clipboard returns text data
-    def clipboard_text_received(self, clipboard, text, data):
-        if not text or text == '':
-            return
-        # execute only after receiving buffer
-        
-        sb = self.sourcebuffer
-        sb.insert_at_cursor(text)
-        
-        #self.execute_source()  # this is a primitive way
-        #self.set_is_executing(True) # instead
-        #self.on_sourceview_return()  # emulate Enter event to execute
-        
-        # ok. on_sourceview_return did not work.
-        # steal a part of code from on_sourceview_return
-        if not self.is_executing:
-            source = get_text(sb, sb.get_start_iter(), sb.get_end_iter())
-            source = source.rstrip()
-            source = self.replace_gtk_quotes(source)
-            try:
-                is_incomplete = self.call_subp_noblock(u'is_incomplete', source)
-            except TimeoutError:
-                is_incomplete = True
-            if not is_incomplete:
-                self.execute_source()
-                return True
-        else:
-            # is_executing
-            self.send_stdin()
-            return True
-        
-        r = newline_and_indent(self.sourceview, INDENT_WIDTH)
-        return r
-
-
-    def OnGlobalKeyboardEvent(self, event): # event is from pyhook not gtk
-        print "pyhook:", event.Key, event.WindowName[:30]
-        if event.Key == 'F9' and event.WindowName not in ('DreamPie', 'C:\\Windows\\system32\\cmd.exe'):
-            #t = threading.Thread(target=self.sendkeys) #added to queue
-            #t.start()
-            self.sendkeys()
-        return True
-    
-    def sendkeys(self):
-        #lock.acquire() # http://stackoverflow.com/questions/3673769/pyhook-pythoncom-stop-working-after-too-much-keys-pressed-python
-        SendKeys('^c') # sending Ctrl+C to the other app in focus
-        self.clear_sb() # clearing multiline editor
-        #self.selection.paste() # this will paste the text buffer but not needed after all.
-        
-        #http://python.developpez.com/cours/pygtktutorial/php/pygtken/examples/clipboard.py
-        self.selection.clipboard.request_text(self.clipboard_text_received)
-        #lock.release()
-        
 
     def on_sv_changed(self, new_sv):
         self.sourceview.disconnect(self.sourceview_keypress_handler)
@@ -785,20 +708,7 @@ class DreamPie(SimpleGladeApp):
             if self._long_press_srcid:
                 source_remove(self._long_press_srcid)
                 self._long_press_srcid = None
-
-        
-    @sourceview_keyhandler('F12', 4)
-    def on_sourceview_f12(self):
-        if sys.platform == 'win32':
-            print 'F12 pressed: repairing pyHook'
-            self.setupGlobalHook()
-        return False
     
-    #@sourceview_keyhandler('Control_L', 4)
-    #@sourceview_keyhandler('q', 4) # Ctrl+q should be like this
-    #def on_sourceview_Q(self, event):
-        #print 'on_sourceview_Q: wa'
-        #return True
     
     @sourceview_keyhandler('Escape', 0)
     def on_sourceview_escape(self):
