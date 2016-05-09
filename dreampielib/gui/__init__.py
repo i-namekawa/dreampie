@@ -834,7 +834,7 @@ class DreamPie(SimpleGladeApp):
 
     def on_textview_keypress(self, _widget, event):
         keyval_name, state = parse_keypress_event(event)
-        print 'on_textview_keypress', keyval_name, state
+        #print 'on_textview_keypress', keyval_name, state
         if (keyval_name, state) in (('Return', 0), ('KP_Enter', 0)):
             return self.history.copy_to_sourceview()
 
